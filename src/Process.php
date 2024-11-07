@@ -69,9 +69,9 @@ class Process
         $this->setEnv($env ?: []);
     }
 
-    public static function fromCommand(string|array $command): static
+    public static function fromCommand(string|array $command, string $cwd = null, array $env = null, mixed $input = null, float $timeout = 60): static
     {
-        return new static($command); //$cwd, $env, $input, $timeout;
+        return new static($command, $cwd, $env, $input, $timeout);
     }
 
 
@@ -114,7 +114,6 @@ class Process
             return static::$ttySupported = false;
         }
 
-        // file_exists('/dev/tty') && is_writable('/dev/tty')
         return static::$ttySupported = stream_isatty(STDOUT) && @is_writable('/dev/tty');
     }
 
@@ -225,23 +224,13 @@ class Process
             return true;
         });
 
-        $descriptors = $this->getDescriptors(! is_null($callback));
+        $descriptors = $this->getDescriptors();
 
         $env = array_merge(getenv(), $this->env, $env);
 
         try {
             $this->process = @proc_open($this->compiledCommand, $descriptors, $this->pipes->pipes, $this->cwd, $env); // $this->options
-
-            // Ensure array vs string commands behave the same
-            //if (!$process && \is_array($commandline)) {
-            //$process = @proc_open('exec '.$this->buildShellCommandline($commandline), $this->getDescriptors(), $this->pipes, $this->cwd); // $envPairs, $this->options
-            //}
         } finally {
-            //if ($this->ignoredSignals && \function_exists('pcntl_sigprocmask')) {
-            // we restore the signal mask here to avoid any side effects
-            //pcntl_sigprocmask(\SIG_SETMASK, $oldMask);
-            //}
-
             restore_error_handler();
         }
 
@@ -301,15 +290,6 @@ class Process
         return $this->status;
     }
 
-    /*
-    protected function buildCallback(Closure $callback = null): Closure
-    {
-        return function () {
-
-        };
-    }
-    */
-
     protected function reset(): void
     {
         $this->process = null;
@@ -324,8 +304,6 @@ class Process
 
     protected function updateStatus(bool $blocking = false): void
     {
-        //echo "UpdateStatus\n";
-
         if ($this->status !== self::STATUS_STARTED)  {
             return;
         }
@@ -346,10 +324,6 @@ class Process
         }
 
         $this->readPipes($running && $blocking, $this->isWindows || ! $running);
-
-        //if ($this->fallbackStatus && $this->isSigchildEnabled()) {
-        //    $this->processInformation = $this->fallbackStatus + $this->processInformation;
-        //}
 
         if (! $running) $this->close();
     }
@@ -397,9 +371,9 @@ class Process
         return $this->exitCode;
     }
 
-    protected function getDescriptors(bool $hasCallback): array
+    protected function getDescriptors(): array
     {
-        $isReadMode = $hasCallback;
+        $isReadMode = ! is_null($this->callback);
 
         if ($this->isWindows) {
             $this->pipes = new WindowsPipes(null, $isReadMode);

@@ -40,7 +40,7 @@ class UnixPipes extends AbstractPipes
         $this->unblock();
         $this->write();
 
-        if (! $this->isReadMode) return null;
+        if (! $this->isReadMode || count($this->pipes) < 2) return null;
 
         $w = $e = $read = [];
         $r = $this->pipes;
